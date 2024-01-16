@@ -1,6 +1,32 @@
 # typed: ignore
 module Api
   class UsersController < BaseController
+    def register
+      email = params[:email]
+      password = params[:password]
+
+      if email.blank? || !(email =~ URI::MailTo::EMAIL_REGEXP)
+        return render json: { message: "Invalid email format." }, status: :bad_request
+      end
+
+      if User.exists?(email: email)
+        return render json: { message: "Email already registered." }, status: :conflict
+      end
+
+      if password.length < 8
+        return render json: { message: "Password must be at least 8 characters long." }, status: :bad_request
+      end
+
+      begin
+        UserService.register(email: email, password: password, password_confirmation: password)
+        render json: { status: 201, message: "User registered successfully. Please check your email to verify your account." }, status: :created
+      rescue ArgumentError => e
+        render json: { message: e.message }, status: :bad_request
+      rescue StandardError => e
+        render json: { message: e.message }, status: :internal_server_error
+      end
+    end
+  class UsersController < BaseController
     def reset_password
       email = params[:email]
 
