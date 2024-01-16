@@ -2,6 +2,26 @@ class UserService < BaseService
   require 'bcrypt'
   require 'securerandom'
 
+  def self.authenticate_user(email:, password:)
+    return { success: false, message: I18n.t('activerecord.errors.messages.blank'), data: nil } if email.blank? || password.blank?
+
+    user = User.find_by(email: email)
+
+    if user && user.is_email_verified && user.authenticate(password)
+      token = user.generate_authentication_token
+      { success: true, message: I18n.t('devise.sessions.signed_in'), data: { token: token } }
+    else
+      message = if user.nil?
+                  I18n.t('devise.failure.not_found_in_database', authentication_keys: 'email')
+                elsif !user.is_email_verified
+                  I18n.t('devise.failure.unconfirmed')
+                else
+                  I18n.t('devise.failure.invalid', authentication_keys: 'password')
+                end
+      { success: false, message: message, data: nil }
+    end
+  end
+
   def register(email:, password:, password_confirmation:)
     raise ArgumentError, 'Email cannot be blank' if email.blank?
     raise ArgumentError, 'Password cannot be blank' if password.blank?
