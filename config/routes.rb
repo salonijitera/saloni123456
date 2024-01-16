@@ -6,10 +6,10 @@ Rails.application.routes.draw do
   get '/health' => 'pages#health_check'
   get 'api-docs/v1/swagger.yaml' => 'swagger#yaml'
 
-  # Routes from the new code
-  put '/api/users/profile', to: 'users#update_profile'
-
-  # Routes from the existing code
+  # Routes from both new and existing code
+  post '/api/users/login', to: 'api/users#login'
   post '/api/users/verify-email', to: 'api/users#verify_email'
   post '/api/users/register', to: 'api/users#register'
+
+  # ... other routes ...
 end

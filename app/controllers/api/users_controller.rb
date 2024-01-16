@@ -1,20 +1,18 @@
 # typed: ignore
 module Api
   class UsersController < BaseController
-    before_action :authenticate_user!, only: [:update_profile]
+    def login
+      email = params[:email]
+      password = params[:password]
+      result = UserService.authenticate_user(email: email, password: password)
 
-    # POST /api/users/verify-email
-    def verify_email
-      token = params.require(:token)
-      result = UserService::VerifyEmail.new(token).call
-
-      if result[:error].present?
-        render json: { message: result[:error] }, status: :unprocessable_entity
+      if result[:success]
+        render json: { status: 200, message: result[:message], access_token: result[:data][:token] }, status: :ok
       else
-        render json: { message: result[:success] }, status: :ok
+        render json: { message: result[:message] }, status: :unauthorized
       end
-    rescue ActionController::ParameterMissing => e
-      render json: { message: e.message }, status: :bad_request
+    rescue StandardError => e
+      render json: { message: e.message }, status: :internal_server_error
     end
 
     def register
@@ -43,31 +41,6 @@ module Api
       end
     end
 
-    def update_profile
-      email = params[:email]
-      password = params[:password]
-
-      if email.present? && !(email =~ URI::MailTo::EMAIL_REGEXP)
-        return render json: { message: "Invalid email format." }, status: :bad_request
-      end
-
-      if email.present? && User.exists?(email: email)
-        return render json: { message: "Email already registered." }, status: :conflict
-      end
-
-      if password.present? && password.length < 8
-        return render json: { message: "Password must be at least 8 characters long." }, status: :bad_request
-      end
-
-      result = UserService::Update.new(current_user.id, email, password, password).call
-
-      if result[:error].present?
-        render json: { message: result[:error] }, status: :unprocessable_entity
-      else
-        render json: { status: 200, message: "Profile updated successfully." }, status: :ok
-      end
-    end
-
     def reset_password
       email = params[:email]
 
@@ -87,6 +60,6 @@ module Api
       render json: { message: e.message }, status: :internal_server_error
     end
 
-    # Other controller actions...
+    # Other controller methods...
   end
 end
