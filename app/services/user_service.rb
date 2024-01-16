@@ -1,5 +1,6 @@
 class UserService < BaseService
   require 'bcrypt'
+  require 'jwt'
   require 'securerandom'
 
   def self.authenticate_user(email:, password:)
@@ -7,8 +8,8 @@ class UserService < BaseService
 
     user = User.find_by(email: email)
 
-    if user && user.is_email_verified && user.authenticate(password)
-      token = user.generate_authentication_token
+    if user && user.is_email_verified && BCrypt::Password.new(user.password_hash) == password
+      token = TokenService.generate_token(user) # Assuming TokenService is implemented elsewhere
       { success: true, message: I18n.t('devise.sessions.signed_in'), data: { token: token } }
     else
       message = if user.nil?
@@ -57,7 +58,7 @@ class UserService < BaseService
     )
 
     # Assuming MailerService is a service responsible for sending emails
-    # MailerService.send_email_verification(user: user, token: token)
+    MailerService.send_email_verification(user: user, token: token)
 
     { message: 'User registered successfully. Please check your email to verify your account.' }
   rescue StandardError => e
@@ -65,9 +66,9 @@ class UserService < BaseService
   end
 
   def self.generate_reset_password_token(email)
-    user = User.find_by(email: email)
+    user = User.find_by_email(email)
 
-    return nil unless user
+    return { error: 'Email does not exist.', status: 404 } if user.nil?
 
     token = SecureRandom.hex(10)
     expiration_time = 2.hours.from_now
@@ -76,14 +77,12 @@ class UserService < BaseService
     email_verification_token.assign_attributes(token: token, expires_at: expiration_time, is_used: false)
     email_verification_token.save!
 
-    # TODO: Send an email to the user with the password reset token and instructions on how to reset their password.
-    # This is a placeholder for the email sending logic.
-    # MailerService.send_password_reset_email(user.email, token)
+    MailerService.send_password_reset_email(user.email, token)
 
-    "If your email is associated with an account, instructions to reset your password have been sent."
+    { message: 'If your email is associated with an account, instructions to reset your password have been sent.', status: 200 }
   rescue ActiveRecord::RecordInvalid => e
     # Log the error
     Rails.logger.error("UserService::generate_reset_password_token - #{e.message}")
-    nil
+    { error: e.message, status: 422 }
   end
 end
