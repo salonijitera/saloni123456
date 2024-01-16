@@ -44,16 +44,22 @@ module Api
     def reset_password
       email = params[:email]
 
-      if email.blank? || !(email =~ URI::MailTo::EMAIL_REGEXP)
+      if email.blank?
         return render json: { message: I18n.t('common.errors.invalid_email') }, status: :unprocessable_entity
+      end
+
+      unless email =~ URI::MailTo::EMAIL_REGEXP
+        return render json: { message: I18n.t('common.errors.invalid_email_format') }, status: :bad_request
       end
 
       user = User.find_by(email: email)
 
-      if user
-        token = UserService.generate_reset_password_token(user)
-        EmailService.send_reset_password_instructions(user, token)
+      if user.nil?
+        return render json: { message: I18n.t('common.errors.email_not_found') }, status: :not_found
       end
+
+      token = UserService.generate_reset_password_token(user)
+      EmailService.new.send_reset_password_instructions(user, token)
 
       render json: { message: I18n.t('common.password_reset_instructions_sent') }, status: :ok
     rescue StandardError => e

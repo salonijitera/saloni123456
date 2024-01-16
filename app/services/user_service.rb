@@ -1,6 +1,5 @@
-
 class UserService < BaseService
-  # Removed the explicit require for bcrypt as Rails automatically loads it
+  require 'bcrypt'
   require 'jwt'
   require 'securerandom'
 
@@ -8,6 +7,7 @@ class UserService < BaseService
     return { success: false, message: I18n.t('activerecord.errors.messages.blank'), data: nil } if email.blank? || password.blank?
 
     user = User.find_by(email: email)
+
     if user && user.is_email_verified && BCrypt::Password.new(user.password_hash) == password
       token = TokenService.generate_token(user) # Assuming TokenService is implemented elsewhere
       { success: true, message: I18n.t('devise.sessions.signed_in'), data: { token: token } }
@@ -16,7 +16,7 @@ class UserService < BaseService
                   I18n.t('devise.failure.not_found_in_database', authentication_keys: 'email')
                 elsif !user.is_email_verified
                   I18n.t('devise.failure.unconfirmed')
-                elsif !BCrypt::Password.new(user.password_hash) == password
+                else
                   I18n.t('devise.failure.invalid', authentication_keys: 'password')
                 end
       { success: false, message: message, data: nil }
@@ -58,7 +58,7 @@ class UserService < BaseService
     )
 
     # Assuming MailerService is a service responsible for sending emails
-    # MailerService.send_email_verification(user: user, token: token)
+    MailerService.send_email_verification(user: user, token: token)
 
     { message: 'User registered successfully. Please check your email to verify your account.' }
   rescue StandardError => e
@@ -66,9 +66,9 @@ class UserService < BaseService
   end
 
   def self.generate_reset_password_token(email)
-    user = User.find_by(email: email)
+    user = User.find_by_email(email)
 
-    return nil unless user
+    return { error: 'Email does not exist.', status: 404 } if user.nil?
 
     token = SecureRandom.hex(10)
     expiration_time = 2.hours.from_now
@@ -77,14 +77,12 @@ class UserService < BaseService
     email_verification_token.assign_attributes(token: token, expires_at: expiration_time, is_used: false)
     email_verification_token.save!
 
-    # TODO: Send an email to the user with the password reset token and instructions on how to reset their password.
-    # This is a placeholder for the email sending logic.
-    # MailerService.send_password_reset_email(user.email, token)
+    MailerService.send_password_reset_email(user.email, token)
 
-    "If your email is associated with an account, instructions to reset your password have been sent."
+    { message: 'If your email is associated with an account, instructions to reset your password have been sent.', status: 200 }
   rescue ActiveRecord::RecordInvalid => e
     # Log the error
     Rails.logger.error("UserService::generate_reset_password_token - #{e.message}")
-    nil
+    { error: e.message, status: 422 }
   end
 end
