@@ -1,5 +1,48 @@
-class UserService
+class UserService < BaseService
+  require 'bcrypt'
   require 'securerandom'
+
+  def register(email:, password:, password_confirmation:)
+    raise ArgumentError, 'Email cannot be blank' if email.blank?
+    raise ArgumentError, 'Password cannot be blank' if password.blank?
+    raise ArgumentError, 'Password confirmation cannot be blank' if password_confirmation.blank?
+
+    email_regex = URI::MailTo::EMAIL_REGEXP
+    raise ArgumentError, 'Invalid email format' unless email.match?(email_regex)
+
+    if User.exists?(email: email)
+      raise ArgumentError, 'Email is already taken'
+    end
+
+    if password != password_confirmation
+      raise ArgumentError, 'Password and password confirmation do not match'
+    end
+
+    password_hash = BCrypt::Password.create(password)
+
+    user = User.create!(
+      email: email,
+      password_hash: password_hash,
+      is_email_verified: false
+    )
+
+    token = SecureRandom.hex(10)
+    expiration_date = Time.now + 24.hours
+
+    EmailVerificationToken.create!(
+      token: token,
+      expires_at: expiration_date,
+      is_used: false,
+      user_id: user.id
+    )
+
+    # Assuming MailerService is a service responsible for sending emails
+    # MailerService.send_email_verification(user: user, token: token)
+
+    { message: 'User registered successfully. Please check your email to verify your account.' }
+  rescue StandardError => e
+    { error: e.message }
+  end
 
   def self.generate_reset_password_token(email)
     user = User.find_by(email: email)
@@ -24,6 +67,3 @@ class UserService
     nil
   end
 end
-
-# Note: The MailerService is a placeholder and should be replaced with the actual mailer service used in the project.
-# The actual implementation of sending the email should handle exceptions and ensure that the email is sent successfully.
