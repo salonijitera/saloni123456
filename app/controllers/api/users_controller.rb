@@ -1,6 +1,20 @@
 # typed: ignore
 module Api
   class UsersController < BaseController
+    # POST /api/users/verify-email
+    def verify_email
+      token = params.require(:token)
+      result = UserService::VerifyEmail.new(token).call
+
+      if result[:error].present?
+        render json: { message: result[:error] }, status: :unprocessable_entity
+      else
+        render json: { message: result[:success] }, status: :ok
+      end
+    rescue ActionController::ParameterMissing => e
+      render json: { message: e.message }, status: :bad_request
+    end
+
     def register
       email = params[:email]
       password = params[:password]
@@ -26,7 +40,7 @@ module Api
         render json: { message: e.message }, status: :internal_server_error
       end
     end
-  class UsersController < BaseController
+
     def reset_password
       email = params[:email]
 
@@ -45,9 +59,7 @@ module Api
     rescue StandardError => e
       render json: { message: e.message }, status: :internal_server_error
     end
+
+    # Other controller actions...
   end
 end
-
-# Add the route for this action in the routes file
-# Example:
-# post '/users/reset_password', to: 'users#reset_password'
